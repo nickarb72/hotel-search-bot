@@ -11,5 +11,6 @@ RAPID_API_KEY = os.getenv("RAPID_API_KEY")
 DEFAULT_COMMANDS = (
     ("start", "Запустить бота"),
     ("get_accom_details", "Получить информацию о размещении"),
+    ("lowprice", "Отображение топа 5-ти самых доступных отелей в указанной локации"),
     ("help", "Вывести справку")
 )

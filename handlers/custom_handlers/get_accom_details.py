@@ -27,6 +27,7 @@ def get_city(message: Message) -> None:
                      reply_markup=request_destination(dest_data))
 
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data['flag'] = False
         data['city'] = message.text
         data['callback_data_dict'] = {}
         for val in dest_data["data"]:
@@ -117,6 +118,7 @@ def get_price_max(message: Message) -> None:
     if message.text.isdigit():
         with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
             data['price_max'] = message.text
+            data['flag'] = True
 
             text = (f"Спасибо за предоставленную информацию. Ваши данные:\n"
                     f"\tрасположение гостиницы - {data['verif_location']};\n"
@@ -124,8 +126,8 @@ def get_price_max(message: Message) -> None:
                     f"\tобщее количество ночей - {data['number_of_nights']};\n"
                     f"\tваш бюджет (за ночь) {data['price_min']} - {data['price_max']} долларов США\n\n"
                     f"Далее можете выбирать гостиницы. Введите команду /help, чтобы получить справку")
-            bot.send_message(message.from_user.id, text)
-            bot.delete_state(message.from_user.id, message.chat.id)
+        bot.send_message(message.from_user.id, text)
+        bot.delete_state(message.from_user.id, message.chat.id)
 
     else:
         bot.send_message(message.from_user.id, "Стоимость может быть только числом. Введите еще раз.")
