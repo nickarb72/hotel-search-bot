@@ -1,11 +1,12 @@
-from telebot.types import Message
+from telebot.types import Message, ReplyKeyboardRemove
 from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
 from datetime import date, timedelta
+import time
 
 from api.core import url, headers
 from api.utils.site_api_handler import make_response
 from keyboards.reply.destination import request_destination
-from loader import bot
+from loader import bot, user_data
 from states.accom_details import AccommodationDetailsStates
 
 
@@ -21,83 +22,47 @@ def get_city(message: Message) -> None:
     querystring = {"query": message.text}
     dest_data = make_response(url, headers=headers, params=querystring, endpoint="searchDestination")
 
+    if not isinstance(dest_data, dict):
+        bot.send_message(message.from_user.id, "Что-то пошло не так. Попробуйте ввести другую локацию.")
+        return
+
     bot.set_state(message.from_user.id, AccommodationDetailsStates.verif_location, message.chat.id)
     bot.send_message(message.from_user.id,
                      "Спасибо. Записал. Теперь уточните локацию, нажав на соответствующую кнопку.",
                      reply_markup=request_destination(dest_data))
 
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        data['flag'] = False
-        data['city'] = message.text
-        data['callback_data_dict'] = {}
-        for val in dest_data["data"]:
-            data['callback_data_dict'][val["label"]] = f"{val["dest_id"]}|{val["search_type"]}"
+    # with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+    #     data['flag'] = False
+    #     data['city'] = message.text
+    #     data['callback_data_dict'] = {}
+    #     for val in dest_data["data"]:
+    #         data['callback_data_dict'][val["label"]] = f"{val["dest_id"]}|{val["search_type"]}"
+    user_data[message.chat.id] = {}
+    user_data[message.chat.id]['flag'] = False
+    user_data[message.chat.id]['city'] = message.text
+    user_data[message.chat.id]['callback_data_dict'] = {}
+    for val in dest_data["data"]:
+        user_data[message.chat.id]['callback_data_dict'][val["label"]] = f"{val["dest_id"]}|{val["search_type"]}"
 
 
 @bot.message_handler(state=AccommodationDetailsStates.verif_location)
 def get_verif_location(message: Message) -> None:
     bot.set_state(message.from_user.id, AccommodationDetailsStates.arrival_date, message.chat.id)
-    bot.send_message(message.from_user.id, "Спасибо. Записал. Теперь выберите дату заезда.")
+    bot.send_message(message.from_user.id, "Спасибо. Записал. Теперь выберите дату заезда.", reply_markup=ReplyKeyboardRemove())
     calendar, step = DetailedTelegramCalendar(
         min_date=date.today(),
         max_date=date.today() + timedelta(days=365)
     ).build()
     bot.send_message(message.chat.id, f"Select {LSTEP[step]}", reply_markup=calendar)
 
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        data['verif_location'] = message.text
-        data['dest_id'], data['search_type'] = data['callback_data_dict'][data['verif_location']].split("|")
-        del data['callback_data_dict']
-
-
-@bot.callback_query_handler(func=DetailedTelegramCalendar.func())
-def cal(c):
-    result, key, step = DetailedTelegramCalendar().process(c.data)
-
-    if not result and key:
-        bot.edit_message_text(f"Select {LSTEP[step]}",
-                              c.message.chat.id,
-                              c.message.message_id,
-                              reply_markup=key)
-    elif result:
-        current_state = bot.get_state(c.from_user.id, c.message.chat.id)
-
-        if current_state == "AccommodationDetailsStates:arrival_date":
-            with bot.retrieve_data(c.from_user.id, c.message.chat.id) as data:
-                today = date.today()
-                arrival_date = result
-
-                if arrival_date < today:
-                    bot.send_message(c.message.chat.id, "Дата заезда не может быть раньше сегодняшней даты. Пожалуйста, выберите другую дату.")
-                    return
-
-                data['arrival_date'] = result
-                bot.set_state(c.from_user.id, AccommodationDetailsStates.departure_date, c.message.chat.id)
-                bot.edit_message_text(f"Вы выбрали дату заезда: {result}. Теперь выберите дату выезда.",
-                                      c.message.chat.id,
-                                      c.message.message_id)
-
-            calendar, step = DetailedTelegramCalendar(
-                min_date=result,
-                max_date=result + timedelta(days=365)
-            ).build()
-            bot.send_message(c.message.chat.id, f"Select {LSTEP[step]}", reply_markup=calendar)
-
-        elif current_state == "AccommodationDetailsStates:departure_date":
-            with bot.retrieve_data(c.from_user.id, c.message.chat.id) as data:
-                arrival_date = data.get('arrival_date')
-                departure_date = result
-
-                if departure_date < arrival_date:
-                    bot.send_message(c.message.chat.id, "Дата выезда не может быть раньше даты заезда. Пожалуйста, выберите другую дату.")
-                    return
-
-                data['departure_date'] = result
-                data['number_of_nights'] = (data['departure_date'] - data['arrival_date']).days
-                bot.set_state(c.from_user.id, AccommodationDetailsStates.price_min, c.message.chat.id)
-                bot.edit_message_text(f"Вы выбрали дату выезда: {result}. Теперь введите минимальную стоимость проживания в сутки в долларах США.",
-                                      c.message.chat.id,
-                                      c.message.message_id)
+    # with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+    #     data['verif_location'] = message.text
+    #     data['dest_id'], data['search_type'] = data['callback_data_dict'][data['verif_location']].split("|")
+    #     del data['callback_data_dict']
+    user_data[message.chat.id]['verif_location'] = message.text
+    user_data[message.chat.id]['dest_id'], user_data[message.chat.id]['search_type'] \
+        = user_data[message.chat.id]['callback_data_dict'][user_data[message.chat.id]['verif_location']].split("|")
+    del user_data[message.chat.id]['callback_data_dict']
 
 
 @bot.message_handler(state=AccommodationDetailsStates.price_min)
@@ -106,8 +71,8 @@ def get_price_min(message: Message) -> None:
         bot.set_state(message.from_user.id, AccommodationDetailsStates.price_max, message.chat.id)
         bot.send_message(message.from_user.id, "Спасибо. Записал. Теперь введите максимальную стоимость проживания в сутки в долларах США.")
 
-        with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-            data['price_min'] = message.text
+        # with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        user_data[message.chat.id]['price_min'] = message.text
 
     else:
         bot.send_message(message.from_user.id, "Стоимость может быть только числом. Введите еще раз.")
@@ -116,16 +81,16 @@ def get_price_min(message: Message) -> None:
 @bot.message_handler(state=AccommodationDetailsStates.price_max)
 def get_price_max(message: Message) -> None:
     if message.text.isdigit():
-        with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-            data['price_max'] = message.text
-            data['flag'] = True
+        # with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        user_data[message.chat.id]['price_max'] = message.text
+        user_data[message.chat.id]['flag'] = True
 
-            text = (f"Спасибо за предоставленную информацию. Ваши данные:\n"
-                    f"\tрасположение гостиницы - {data['verif_location']};\n"
-                    f"\tбронирование гостиницы с {data['arrival_date']} по {data['departure_date']};\n"
-                    f"\tобщее количество ночей - {data['number_of_nights']};\n"
-                    f"\tваш бюджет (за ночь) {data['price_min']} - {data['price_max']} долларов США\n\n"
-                    f"Далее можете выбирать гостиницы. Введите команду /help, чтобы получить справку")
+        text = (f"Спасибо за предоставленную информацию. Ваши данные:\n\n"
+                f"\tрасположение гостиницы - {user_data[message.chat.id]['verif_location']};\n\n"
+                f"\tбронирование гостиницы с {user_data[message.chat.id]['arrival_date']} по {user_data[message.chat.id]['departure_date']};\n\n"
+                f"\tобщее количество ночей - {user_data[message.chat.id]['number_of_nights']};\n\n"
+                f"\tваш бюджет (за ночь) {user_data[message.chat.id]['price_min']} - {user_data[message.chat.id]['price_max']} долларов США\n\n"
+                f"Далее можете выбирать гостиницы. Введите команду /help, чтобы получить справку")
         bot.send_message(message.from_user.id, text)
         bot.delete_state(message.from_user.id, message.chat.id)
 
