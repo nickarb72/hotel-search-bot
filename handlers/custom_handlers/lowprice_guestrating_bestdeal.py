@@ -9,6 +9,7 @@ from .paginator import call_paginator
 @bot.message_handler(commands=["lowprice", "guest_rating", "bestdeal"])
 def lowprice_guestrating_bestdeal(message: Message) -> None:
     flag = user_data.get(message.chat.id, {}).get('flag', False)
+
     if not flag:
         bot.send_message(message.from_user.id, "Сначала введите данные для поиска с помощью команды /get_accom_details")
         return

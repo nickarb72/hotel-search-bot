@@ -3,7 +3,10 @@ from typing import Dict
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 from telegram_bot_pagination import InlineKeyboardPaginator
 
-from loader import bot, user_data
+from loader import bot
+
+
+user_data_hotels = {}
 
 
 def transform_data(hotels: Dict, history: bool) -> Dict:
@@ -52,7 +55,7 @@ def call_paginator(hotels: Dict, message: Message, history: bool) -> None:
 
     # with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
     #     data['hotels'] = hotels
-    user_data[message.chat.id] = hotels
+    user_data_hotels[message.chat.id] = hotels
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('page#'))
@@ -61,7 +64,7 @@ def callback_query(call):
 
     # with bot.retrieve_data(call.from_user.id, call.message.chat.id) as data:
     #     hotels = data['hotels']
-    hotels = user_data.get(call.message.chat.id, {})
+    hotels = user_data_hotels.get(call.message.chat.id, {})
 
     paginator = InlineKeyboardPaginator(
         len(hotels),
@@ -86,7 +89,7 @@ def send_photos(call):
 
     # with bot.retrieve_data(call.from_user.id, call.message.chat.id) as data:
     #     photos = data['hotels'][page - 1]['photos']
-    photos = user_data.get(chat_id, {}).get(page - 1, {}).get('photos', [])
+    photos = user_data_hotels.get(chat_id, {}).get(page - 1, {}).get('photos', [])
 
     media_group = [InputMediaPhoto(photo) for photo in photos]
 
